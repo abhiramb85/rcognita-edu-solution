@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 
 from svgpath2mpl import parse_path
 from collections import namedtuple
+from scipy import interpolate
 # from svgpathconverter import SVGPathConverter
 
 class Animator:
@@ -143,17 +144,35 @@ class Animator3WRobotNI(Animator):
         self.axs_xy_plane = self.fig_sim.add_subplot(221, autoscale_on=False, xlim=(xMin,xMax), ylim=(yMin,yMax),
                                                   xlabel='x [m]', ylabel='y [m]', title='Pause - space, q - quit, click - data cursor')
         self.axs_xy_plane.set_aspect('equal', adjustable='box')
-        self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)   # Help line
-        self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   # Help line
+        self.axs_xy_plane.plot([xMin, xMax], [0, 0], 'k--', lw=0.75)  
+        self.axs_xy_plane.plot([0, 0], [yMin, yMax], 'k--', lw=0.75)   
         self.line_traj, = self.axs_xy_plane.plot(xCoord0, yCoord0, 'b--', lw=0.5)
 
+        # MPC
+        cirlce_target = plt.Circle((circle_coord[0], circle_coord[1]), radius=circle_coord[2]*3, color='yellow', fill=True, lw=2)
+        self.axs_xy_plane.add_artist(cirlce_target)
+
+        cirlce_target = plt.Circle((circle_coord[0], circle_coord[1]), radius=circle_coord[2]*2, color='orange', fill=True, lw=2)
+        self.axs_xy_plane.add_artist(cirlce_target)
+
+        cirlce_target = plt.Circle((circle_coord[0], circle_coord[1]), radius=circle_coord[2], color='red', fill=True, lw=2)
+        self.axs_xy_plane.add_artist(cirlce_target)
+
+        
+
+
+        #STANLEY
+
+        #x_ref = np.array([-3, -2, -1, 0])
+        #y_ref = np.array([-3, -1, -2, 0])
+        #linear = interpolate.interp1d(x_ref, y_ref, kind='cubic')
+        #xh = np.linspace(-3, 0, 100)
+        #y_linear = linear(xh)
+        #self.axs_xy_plane.plot(xh, y_linear, color='blue')
+        #self.axs_xy_plane.plot(xh, y_linear, '-*', color='blue')  #dots show
 
         cirlce_target = plt.Circle((0, 0), radius=0.2, color='y', fill=True, lw=2)
         self.axs_xy_plane.add_artist(cirlce_target)
-        self.text_target_handle = self.axs_xy_plane.text(0.88, 0.9, 'Target',
-                                                   horizontalalignment='left', verticalalignment='center', transform=self.axs_xy_plane.transAxes)        
-
-
 
         self.robot_marker = RobotMarker(angle=alpha_deg0)
         text_time = 't = {time:2.3f}'.format(time = t0)
@@ -343,6 +362,31 @@ class Animator3WRobotNI(Animator):
             reset_line(self.line_traj)
     
             upd_line(self.line_traj, np.nan, np.nan)
+
+def generate_obstacle_map(random_variable, x_range, y_range, step=0.25):
+    # Создаем массив значений по осям X и Y с заданным шагом
+    x_values = np.arange(x_range[0], x_range[1], step)
+    y_values = np.arange(y_range[0], y_range[1], step)
+    
+    # Создаем сетку точек X и Y с использованием meshgrid
+    X, Y = np.meshgrid(x_values, y_values)
+    
+    # Вычисляем значения функции плотности вероятности для каждой точки сетки
+    Z = random_variable.pdf(np.dstack((X, Y)))
+    
+    # Возвращаем массивы X, Y и Z
+    return X, Y, Z
+
+def create_obstacle_map(rv, x_range, y_range):
+    step = 0.25
+
+    x_values = np.arange(x_range[0], x_range[1], step)
+    y_values = np.arange(y_range[0], y_range[1], step)
+    
+    X, Y = np.meshgrid(x_values, y_values)
+    Z = rv.pdf(np.dstack((X, Y)))
+    
+    return X, Y, Z
 
             
 

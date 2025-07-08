@@ -22,6 +22,7 @@ import math
 # For debugging purposes
 from tabulate import tabulate
 import os
+import sys
 
 def ctrl_selector(t, observation, action_manual, ctrl_nominal, ctrl_benchmarking, mode):
     """
@@ -298,6 +299,9 @@ class ControllerOptimalPredictive:
         self.action_sqn_init = []
         self.state_init = []
 
+        self.obstacle_pos = obstacle
+        self.initialize_obstacle_distribution(obstacle)
+
         if len(action_init) == 0:
             self.action_curr = self.action_min/10
             self.action_sqn_init = rep_mat( self.action_min/10 , 1, self.Nactor)
@@ -355,6 +359,7 @@ class ControllerOptimalPredictive:
             self.Wmin = np.zeros(self.dim_critic) 
             self.Wmax = np.ones(self.dim_critic) 
         self.N_CTRL = N_CTRL()
+        self.S_CTRL = S_CTRL()
 
     def reset(self,t0):
         """
@@ -395,19 +400,39 @@ class ControllerOptimalPredictive:
         
         """
         self.accum_obj_val += self.run_obj(observation, action)*self.sampling_time
-                 
+
+
+    def initialize_obstacle_distribution(self, obstacle):
+        self.obstacle_position = np.array([obstacle[:2]])
+        self.obstacle_sigma_x = obstacle[2]
+        self.obstacle_sigma_y = obstacle[2]
+
+    def gaussian(self, x, mu, sigma):
+        return np.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi))     
+         
     def run_obj(self, observation, action):
         """
         Running (equivalently, instantaneous or stage) objective. Depending on the context, it is also called utility, reward, running cost etc.
         
         See class documentation.
         """
-        run_obj = 1
+
         #####################################################################################################
         ################################# write down here cost-function #####################################
         #####################################################################################################
 
-        return run_obj
+        if self.run_obj_struct == "quadratic":
+            factor = np.concatenate([observation, action])
+            cost = np.dot(factor, np.dot(self.run_obj_pars[0], factor))
+
+        if self.obstacle_pos is not None:
+            obstacle_gain = 1000000000
+            obs_cost_x = self.gaussian(observation[0], self.obstacle_position[0][0], self.obstacle_sigma_x)
+            obs_cost_y = self.gaussian(observation[1], self.obstacle_position[0][1], self.obstacle_sigma_y)
+            obs_cost = obs_cost_x * obs_cost_y
+            cost += obstacle_gain * obs_cost
+
+        return cost
 
     def _actor_cost(self, action_sqn, observation):
         """
@@ -542,20 +567,109 @@ class ControllerOptimalPredictive:
                 
                 action = self.N_CTRL.pure_loop(observation)
             
+            elif self.mode == "S_CTRL":
+                action = self.S_CTRL.pure_loop(observation)
+
             self.action_curr = action
-            
+
             return action    
     
         else:
             return self.action_curr
 
-class N_CTRL:
+class N_CTRL:       ####### for wheeled mobile robot
 
         #####################################################################################################
         ########################## write down here nominal controller class #################################
         #####################################################################################################
 
+
+    def pure_loop(self, observation):
+        
+        
+        theta=observation[2]
+        k_rho = 15
+        k_betha = -1.5
+        k_alpha = 3
+        x_goal = -1
+        y_goal = 0 
+        e_x = x_goal - observation[0]
+        e_y = y_goal - observation[1]
+
+        rho = math.sqrt(e_x**2 + e_y**2)
+        alpha = -theta + math.atan2(e_y,e_x)
+        betha = -theta - alpha
+        
+        
+        v = k_rho*rho
+        w = k_alpha*alpha + k_betha*betha
+
+        if  -(np.pi) < theta <=  -(np.pi)/2 or  (np.pi)/2 < theta <= (np.pi):
+            v=-v
+        
         return [v,w]
+    
+
+class S_CTRL:       ########## for stanley control
+
+    def __init__(self):
+        self.x_control = [-3, -1, -2, 0]
+        self.y_control = [-3, -2, -1, 0]
+        self.z_control = [1.54, 1, 1, 1] 
+        self.num_points = 5
+        self.curve_points = self.generate_curve_points()
+        self.previous_v=0
+        self.previous_w=0
+        self.next_point=[]
+        self.current_point=[]
+
+    def generate_curve_points(self):
+        curve_points = []
+        t_vals = np.linspace(0, 1, self.num_points)
+        for t in t_vals:
+            Bt = (1 - t) ** 3, 3 * (1 - t) ** 2 * t, 3 * (1 - t) * t ** 2, t ** 3
+            x = sum(Bt[i] * self.x_control[i] for i in range(4))
+            y = sum(Bt[i] * self.y_control[i] for i in range(4))
+            z = sum(Bt[i] * self.z_control[i] for i in range(4))
+            curve_points.append((x, y, z))
+
+        print(curve_points)
+        return curve_points
+
+    def calculate_nearest_point(self,current_pose):
+        trajectory_oints = self.curve_points
+        # x_t=current_pose[0]
+        # y_t=current_pose[1]
+        # print("current position&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&",current_pose)
+        distances=[]
+        for point in trajectory_oints:
+            distance = np.sqrt((point[0] - current_pose[0])**2 + (point[1] - current_pose[1])**2)
+            distances.append(distance)
+
+        index_of_nearest_point=distances.index(min(distances))
+        nearest_point = trajectory_oints[index_of_nearest_point]
+
+        
+
+        return nearest_point
+    
+    def pure_loop(self, observation):
+        
+        self.current_point=observation
+        nearest_point = self.calculate_nearest_point(observation)
+        self.next_point=nearest_point
+
+        
+        v=0.2
+        k=1 #proportional gain
+        theta_e = nearest_point[2]-observation[2]
+        efa = (nearest_point[1]-observation[1])*np.cos(observation[2])-(nearest_point[0]-observation[0])*np.cos(observation[2])
+        dt = theta_e + np.arctan((k*efa)/v)
+        w=dt
+
+        return [v,w]
+
+    
 
 
 
