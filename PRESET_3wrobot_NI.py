@@ -36,7 +36,8 @@ parser = argparse.ArgumentParser(description=description)
 
 parser.add_argument('--ctrl_mode', metavar='ctrl_mode', type=str,
                     choices=['MPC',
-                             "N_CTRL"],
+                             "N_CTRL",
+                             "S_CTRL"],
                     default='N_CTRL',
                     help='Control mode. Currently available: ' +
                     '----manual: manual constant control specified by action_manual; ' +
@@ -131,10 +132,10 @@ parser.add_argument('--init_robot_pose_theta', type=float,
                     default=1.57,
                     help='Initial orientation angle (in radians) of the robot pose.')
 parser.add_argument('--distortion_x', type=float,
-                    default=-0.6,
+                    default=3,
                     help='X-coordinate of the center of distortion.')
 parser.add_argument('--distortion_y', type=float,
-                    default=-0.5,
+                    default=3,
                     help='Y-coordinate of the center of distortion.')
 parser.add_argument('--distortion_sigma', type=float,
                     default=0.1,
